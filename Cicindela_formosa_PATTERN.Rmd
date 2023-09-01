@@ -1,0 +1,268 @@
+---
+title: "Cicindela_formosa_PATTERN"
+author: "Wei Han"
+date: "2023-08-19"
+output: html_document
+---
+
+
+```{r}
+library(tidyverse)
+library(patternize)
+library(dplyr)
+library(recolorize)
+library(raster)
+library(palmerpenguins)
+library(ggplot2)
+library(cowplot)
+```
+
+[[[[PATTERNIZE OBJECTS]]]]
+
+PATTERNIZE
+```{r}
+
+setwd("C:/Users/USER/Documents/My School Documents/UofA/Lightroom")
+
+#ID list of images
+pictures <- tools::file_path_sans_ext(dir("test images/", ".jpg"))
+
+# make list with images
+imageList <- makeList(pictures, type = "image", prepath = "test images/", extension = ".jpg")
+
+# make list with landmarks
+landmarkList <- makeList(pictures, type = "landmark", prepath = "test landmarks/", extension = "_landmarks.txt")
+
+# use CNC1860122 as the (test) reference image
+target <- landmarkList[["CNC1151335"]]
+
+# make mask
+mask <- read.table("test masks increased/CNC1151335 outline.txt", header = FALSE)
+
+# Use patternize function alignLan() to align images
+imageList_aligned <- alignLan(imageList, 
+                              landmarkList, 
+                              transformRef = target, 
+                              adjustCoords = TRUE,
+                              plotTransformed = T, 
+                              resampleFactor = 5, 
+                              cartoonID = 'CNC1151335',
+                              maskOutline = mask)
+
+```
+
+
+PREPARING RECOLORIZE
+```{r}
+
+setwd("C:/Users/USER/Documents/My School Documents/UofA/Lightroom")
+
+# Reading back Raster file - still a Raster at this point
+imageList_aligned <- readRDS("rds files/imageList_aligned_partII.rds")
+
+# Changing rasters to image arrays 
+imgs <- lapply(imageList_aligned, brick_to_array)
+
+# save raster extents for later conversion:
+extent_list1 <- lapply(imageList_aligned, extent)
+
+# Using the same names as imageList_aligned to imgs (image array and not raster)
+names(imgs) <- names(imageList_aligned)
+
+# Seeing what the image arrays look like (why is it so squashed?)
+plotImageArray(imgs[["CNC1151335"]])
+
+```
+
+RECOLORIZE 
+```{r}
+
+# make an empty vector (a one-dimensional list) for storing the recolorize objects
+rc_list <- vector("list", length(imgs))
+
+# use the same names as imgs to rc_list
+names(rc_list) <- names(imgs)
+
+# make a list of recolorize images. For every image, run the same recolorize2() function to fit a recolorize object (Bins = 3, which means that 27 bins will be formed in the colour space because dividing each colour channel into 3 bins forms a total of 27 bins (3^3) since there are 3 colour channels
+
+for (i in 1:length(imgs)) {
+  rc_list[[i]] <- recolorize2(imgs[[i]], bins = 3,
+                              cutoff = 35, plotting = FALSE)
+}
+
+```
+VISUALIZE I 
+
+```{r}
+
+#visualize the colour centers for each image 
+
+for (i in 1:length(rc_list)) {
+  
+  plotColorClusters(rc_list[[i]]$centers, rc_list[[i]]$sizes, 
+                  plus = .5,
+                  color_space = "sRGB", 
+                  xlab = "red", ylab = "green", zlab = "blue", 
+                  mar = c(3, 3, 2, 2),
+                  main = "Histogram method of forming colour centers")
+}
+
+```
+
+VISUALIZE II
+
+```{r}
+
+# plot a side-by-side comparison of an original image and its recolorized version, plus the color palette used for recoloring (I still don't understand why my original image is still so squashed)
+
+for (i in 1:length(rc_list)) {
+  
+  plot(rc_list[[i]], 
+       mar = c(3, 3, 2, 2), 
+       main = "Histogram method of forming colour centers")
+}
+
+```
+
+
+
+```{r}
+# get a dataframe of all colors generated from recolorize2() in the recolorize objects in rc_list
+all_palettes <- do.call(rbind, lapply(rc_list, function(i) i$centers))
+
+# get a dataframe for cluster sizes (as a proportion of their original image):
+all_sizes <- do.call(c, lapply(rc_list, function(i) i$sizes))
+
+# plot colors using hclust_color() and form a grouping list first of 3 and 2. In the resulting lists, each element is a vector of which of the original colors should be clustered together. By default, hclust_color() calculates the Euclidean distance matrix between all provided color centers in CIE Lab color space
+
+cluster_list <- hclust_color(all_palettes, n_final = 3)
+
+cluster_list2 <- hclust_color(all_palettes, n_final = 2)
+
+# the number indices for each colour blob here don't really mean anything - they're just colour indices used in the package? I think?
+```
+
+(next two code patches) Making a universal colour pallete to impose on to all of my images in a data set. Every pixel is assigned to the color it is closest to in some specified color space. I am doing this because this makes the most sense in terms of batch processing. This process involves extracting a specifeid number of colours from the colour cluster list generated from all of the specimen image, then mapping them onto every image, so that the color centers (and the subsequent colour maps) are the same across all of my images.
+
+```{r}
+# make an empty array for storing the new palette. ncol = 3 because 
+elytra_palette2 <- matrix(NA, ncol = 3, nrow = length(cluster_list2))
+
+# Using the list formed by hclust_colour() to - for every color in cluster_list...
+for (i in 1:length(cluster_list2)) {
+  
+  # get the center indices
+  idx <- cluster_list2[[i]]
+  
+  # get the average value for each channel, using cluster size to get a weighted average
+  ctr <- apply(all_palettes, 2,
+                 function(j) weighted.mean(j[idx], w = all_sizes[idx]))
+  
+  # store in the palette matrix
+  elytra_palette2[i, ] <- ctr
+}
+
+# check that our colors seem reasonable
+par(mar = rep(0, 4))
+plotColorPalette(elytra_palette2)
+```
+
+```{r}
+
+# use imposeColors() to map every image to the same set of two colors as earlier defined by hcluster_color(). Imposecolors takes an image and a set of color centers, and assigns each pixel to the most similar provided color as earlier defined. This is done for batch processing because it produces a set of images with identical colors. 
+impose_list2 <- lapply(imgs, function(i) imposeColors(i, elytra_palette2, 
+                                                     adjust_centers = FALSE, 
+                                                     plotting = TRUE))
+```
+
+```{r}
+
+# visualize palletes and recolorized object imaages 
+
+layout(matrix(1:10, nrow = 2, ncol = 5))
+par(mar = rep(0, 4))
+for (i in impose_list2) { 
+  plotImageArray(recoloredImage(i))
+  plotColorPalette(i$centers, i$sizes, horiz = FALSE)
+}
+```
+
+Converteach recolorize fit in back to a patternize format using recolorize_to_patternize() so that we can continue analyses in patternize (Does recolorize offer colour pattern analuses tools? at all?)
+```{r}
+
+# convert to patternize:
+patternize_list2 <- lapply(impose_list2, recolorize_to_patternize)
+patternize_test <- lapply(impose_list2, recolorize_to_patternize)
+
+extent_list <- lapply(imageList_aligned, extent)
+
+# set extents again:
+for (i in 1:length(patternize_list2)) {
+  for (j in 1:length(patternize_list2[[1]])) {
+    raster::extent(patternize_list2[[i]][[j]]) <- extent_list[[i]]
+  }
+}
+```
+
+
+```{r}
+
+#plot PCA using custom function 
+setwd("C:/Users/USER/Documents/My School Documents/UofA/Lightroom")
+
+source("patPCA_total.R")
+
+test_pca <- patPCA_total(patternize_list2, quietly = FALSE)
+
+```
+
+Struggling to get legible data from the PCA. How do I read the rotations and loadings of the PCA plot? What variables are being used to assess variation in the PCA? shape? colour? 
+
+```{r}
+patternize_merged <- vector("list", length(patternize_test))
+
+for (i in 1:length(patternize_test)) {
+    patternize_merged[i] <- do.call(merge, patternize_test[[i]])
+}
+
+IDlist <- c('CNC1151335','CNC1151393', 'CNC1860122','CNC1860123','CNC1860300')
+```
+
+
+trying to run a regular patternize PCA
+
+```{r}
+# sum colour patterns?
+summedtest <- sumRaster(patternize_test, IDlist, type = "k")
+#summedtest2 <- sumRaster(patternize_test, IDlist)
+
+
+# making theoretical populations from the five practice images 
+pop1 <- c("CNC1151335","CNC1151393", "CNC1860300")
+pop2 <- c("CNC1860122","CNC1860123")
+popList <- list(pop1, pop2)
+colList <- c("red", "blue")
+symbolList <- c(16,17)
+
+
+patPCA(patternize_merged, 
+       popList,
+       colList,
+       symbolList = symbolList, 
+       plot = TRUE,
+       plotType = "points",
+       plotChanges = TRUE,
+       plotCartoon = TRUE,
+       refShape = "target",
+       refImage = imageList[["CNC1151335"]], 
+       outline = mask,
+       flipRaster = "y", 
+       imageList = imageList,
+       normalized = TRUE,
+       cartoonID = "CNC1151335",
+       cartoonFill = "black", 
+       cartoonOrder = "under", 
+       legendTitle = "Differences")
+
+```
+
