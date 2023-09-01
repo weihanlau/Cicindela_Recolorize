@@ -52,7 +52,8 @@ imageList_aligned <- alignLan(imageList,
 ```
 
 
-PREPARING RECOLORIZE
+[[[[PREPARING RECOLORIZE]]]]]
+
 ```{r}
 
 setwd("C:/Users/USER/Documents/My School Documents/UofA/Lightroom")
@@ -74,7 +75,8 @@ plotImageArray(imgs[["CNC1151335"]])
 
 ```
 
-RECOLORIZE 
+[[[[[RECOLORIZE]]]]
+
 ```{r}
 
 # make an empty vector (a one-dimensional list) for storing the recolorize objects
@@ -91,7 +93,7 @@ for (i in 1:length(imgs)) {
 }
 
 ```
-VISUALIZE I 
+[[[[VISUALIZE I]]]]] 
 
 ```{r}
 
@@ -109,7 +111,7 @@ for (i in 1:length(rc_list)) {
 
 ```
 
-VISUALIZE II
+[[[[VISUALIZE II]]]]
 
 ```{r}
 
@@ -187,7 +189,9 @@ for (i in impose_list2) {
 }
 ```
 
-Converteach recolorize fit in back to a patternize format using recolorize_to_patternize() so that we can continue analyses in patternize (Does recolorize offer colour pattern analuses tools? at all?)
+Converteach recolorize fit in back to a patternize format using recolorize_to_patternize() so that we can continue analyses in patternize
+
+[[[[CONVERT BACK TO PATTERNIZE]]]]]
 ```{r}
 
 # convert to patternize:
@@ -204,7 +208,7 @@ for (i in 1:length(patternize_list2)) {
 }
 ```
 
-
+[[[[PatPCA_total]]]]
 ```{r}
 
 #plot PCA using custom function 
@@ -216,7 +220,7 @@ test_pca <- patPCA_total(patternize_list2, quietly = FALSE)
 
 ```
 
-Struggling to get legible data from the PCA. How do I read the rotations and loadings of the PCA plot? What variables are being used to assess variation in the PCA? shape? colour? 
+[[[[Struggling to get legible data from the PCA. How do I read the rotations and loadings of the PCA plot? What variables are being used to assess variation in the PCA? shape? colour?]]]]
 
 ```{r}
 patternize_merged <- vector("list", length(patternize_test))
@@ -229,7 +233,7 @@ IDlist <- c('CNC1151335','CNC1151393', 'CNC1860122','CNC1860123','CNC1860300')
 ```
 
 
-trying to run a regular patternize PCA
+[[[[[trying to run a regular patternize PCA]]]]
 
 ```{r}
 # sum colour patterns?
