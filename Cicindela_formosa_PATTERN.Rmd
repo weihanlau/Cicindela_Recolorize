@@ -169,6 +169,8 @@ par(mar = rep(0, 4))
 plotColorPalette(elytra_palette2)
 ```
 
+[[[IMPOSE elytra_palette2 colour palette (of only two colours) on to the images
+
 ```{r}
 
 # use imposeColors() to map every image to the same set of two colors as earlier defined by hcluster_color(). Imposecolors takes an image and a set of color centers, and assigns each pixel to the most similar provided color as earlier defined. This is done for batch processing because it produces a set of images with identical colors. 
